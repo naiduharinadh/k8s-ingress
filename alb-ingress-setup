@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: java-app
+  template:
+    metadata:
+      labels:
+        app: java-app
+    spec:
+      containers:
+      - name: java-app
+        image: harinadh14/maven_spring_working_mongosever:v1.0
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 200m
+---
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-app
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"  # Use "nlb" for Network Load Balancer
+spec:
+  selector:
+    app: java-app
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: LoadBalancer
+
+---
+# ALB ngress class configuration: https://docs.aws.amazon.com/eks/latest/userguide/enable-iam-roles-for-service-accounts.html, https://docs.aws.amazon.com/eks/latest/userguide/lbc-helm.html
+# https://github.com/naiduharinadh/k8s_ingress_worker/blob/main/ingress_class.yml
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  annotations:
+    meta.helm.sh/release-name: aws-load-balancer-controller
+    meta.helm.sh/release-namespace: kube-system
+#  creationTimestamp: "2024-03-30T10:04:00Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/instance: aws-load-balancer-controller
+ #   app.kubernetes.io/managed-by: Helm
+ #   app.kubernetes.io/name: aws-load-balancer-controller
+ #   app.kubernetes.io/version: v2.7.2
+ #   helm.sh/chart: aws-load-balancer-controller-1.7.2
+  name: alb-ingress
+#  resourceVersion: "5903"
+#  uid: b7a02c4c-83e5-470d-8dd5-9e3ab0d9609c
+spec:
+  controller: ingress.k8s.aws/alb
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingresstg
+  annotations:
+    svcusedfor: usingserviceForALB
+spec:
+  selector:
+    app: java-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
+
+
+---
+# ingress Actaul ALB path based routing configuration
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alb-ingress-controller
+  annotations:
+    kubernetes.io/ingress.class: "alb"
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/target-type: "ip"
+spec:
+  ingressClassName: alb
+  rules:
+  - host: ""
+    http:
+      paths:
+      - path: /allusers
+        pathType: Prefix
+        backend:
+          service:
+            name: ingresstg
+            port:
+              number: 80
+
+      - path: /saveuser
+        pathType: Prefix
+        backend:
+          service:
+            name: ingresstg
+            port:
+              number: 80
