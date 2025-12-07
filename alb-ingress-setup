@@ -20,9 +20,48 @@ spec:
             cpu: 500m
           requests:
             cpu: 200m
+
+
+
 ---
+# Allow EKS access to the AWS IAM users "harinadn-Isengard"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-auth
+  namespace: kube-system
+data:
+  mapRoles: |
+    - rolearn: arn:aws:iam::724772088191:role/test-ec2-cloudwatch-full-access
+      username: system:node:{{EC2PrivateDNSName}}
+      groups:
+        - system:bootstrappers
+        - system:nodes
+        - system:masters
+    - rolearn: arn:aws:sts::724772088191:assumed-role/Admin/harinadn-Isengard
+      username: admin
+      groups:
+        - system:masters
+---
+# Specify access to the AWS IAM users "harinadn-Isengard" using the "apiGroup: rbac.authorization.k8s.io"
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user-binding
+subjects:
+- kind: User
+  name: "arn:aws:sts::724772088191:assumed-role/Admin/harinadn-Isengard"
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
 
 
+
+
+---
 apiVersion: v1
 kind: Service
 metadata:
